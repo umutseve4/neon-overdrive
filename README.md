@@ -1,48 +1,61 @@
-<h1 align="center">neon-overdrive</h1>
+# Neon Overdrive
 
-<p align="center">
-  <b>This repository is empty on purpose.</b><br>
-  No game code has been committed yet — only a licence and this page.<br>
-  Everything below is intent, not a description of working software.
-</p>
+**Beş şeritli bir neon koridorda, sabit bir tohumdan üretilen engellerin arasından uçarsın.** Tek bir `index.html`. Derleme yok, paket yok, varlık dosyası yok, sunucu yok. Aç ve oyna.
 
-<p align="center">
-  <img src="https://img.shields.io/badge/status-placeholder-FF4D4F?style=flat-square" alt="placeholder">
-  <img src="https://img.shields.io/badge/committed%20files-2-FF4D4F?style=flat-square" alt="2 files">
-  <img src="https://img.shields.io/badge/playable%20build-none-FF4D4F?style=flat-square" alt="no build">
-</p>
+[![qa](https://img.shields.io/github/actions/workflow/status/umutseve4/neon-overdrive/qa.yml?branch=main&style=flat-square&label=qa)](https://github.com/umutseve4/neon-overdrive/actions/workflows/qa.yml)
+![dosya](https://img.shields.io/badge/kaynak-1%20dosya-555?style=flat-square)
+![bağımlılık](https://img.shields.io/badge/uzak%20bağımlılık-1-555?style=flat-square)
 
 ---
 
-## What is actually in here
+## Ne yapar
 
-As of 2026-09-06 the repository root contains exactly two files:
+Ekran boyunca ilerleyen bir koridor üretilir. Her 62 metrede bir engel sırası gelir ve bu sıra beş şeridin **en fazla üçünü** kapatır — yani her sırada en az iki boş şerit kalır. Engeller rastgele değil: `0x5eed1` **tohumundan** deterministik olarak türetilir, bu yüzden koridor her açılışta aynıdır. Değişen tek şey senin sürüşündür.
 
-| File | Purpose |
+Hız zamanla artar (34'ten 132'ye), turbo bunu 1.55 katına çıkarır. Fizik 1/120 saniyelik sabit adımlarla çalışır; yani 20 FPS'de de 144 FPS'de de aynı koridoru aynı hızda geçersin.
+
+## Nasıl oynanır
+
+| Tuş | Etki |
 |---|---|
-| `LICENSE` | MIT |
-| `README.md` | this file |
+| <kbd>A</kbd> / <kbd>←</kbd> | Bir şerit sola |
+| <kbd>D</kbd> / <kbd>→</kbd> | Bir şerit sağa |
+| <kbd>Space</kbd> | Turbo (basılı tut) |
+| <kbd>P</kbd> | Duraklat / devam |
+| **R tuşu** | Baştan başlat |
 
-There is no `index.html`, no `src/`, no build config, and no playable build.
+Dokunmatik cihazlarda alttaki dört buton aynı işi görür.
 
-## Intended concept
+## Nasıl çalıştırılır
 
-A single-file 3D cyberpunk endless flyer: procedurally generated corridor
-geometry and neon lighting, no external art assets, rendered with Three.js from a
-CDN so the whole thing stays one HTML file.
+```bash
+git clone https://github.com/umutseve4/neon-overdrive.git
+cd neon-overdrive
+python3 -m http.server 8080
+# http://127.0.0.1:8080
+```
 
-## Why the README says this instead of pitching the game
+`index.html` dosyasını doğrudan çift tıklayarak da açabilirsin; ES modülü CDN'den geldiği için `file://` üzerinde tarayıcı CORS kuralları engelleyebilir, o durumda yukarıdaki sunucuyu kullan.
 
-A public repository whose README describes a game in the present tense, while
-shipping zero lines of that game, misrepresents the work. Every repository on this
-account is held to one rule: **the README describes only what the committed code
-actually does.** This one is held to it too.
+## Nasıl doğrulanır
 
-## Limits
+```bash
+node tests/qa.mjs      # statik kapı + oynanabilirlik kanıtı
+node tests/browser.mjs http://127.0.0.1:8080   # gerçek Chromium'da kabul testi
+```
 
-- Nothing here runs. There is no demo, no screenshot, and no benchmark, because there is no code.
-- `umutseve4/neon-overdrive-game` is a byte-identical sibling of this repository — same two files, same text. The two should be consolidated: keep one as the eventual home for the implementation, delete the other. Repository deletion requires the owner; it cannot be done with an automation token.
+`tests/qa.mjs` yalnızca metin aramaz. `index.html` içindeki üreteç bloğunu **söker ve çalıştırır**, ardından 20 000 satır boyunca (a) her sıranın en az iki boş şerit bıraktığını ve (b) satır başına en fazla iki şerit değiştirebilen bir oyuncunun ulaşılabilir şerit kümesinin **hiç boşalmadığını** kanıtlar. Yani "geçilemez duvar" hatası teoride değil, ölçüyle dışarıda tutulur. Üreteç kodunun kopyası testte tutulmaz; tek kaynak `index.html`'dir.
 
----
+## Sınırlar
 
-MIT — see [`LICENSE`](./LICENSE).
+- **WebGL zorunludur.** Yazılımsal bir yedeği yoktur; donanım hızlandırması yoksa oyun yerine açıklama metni gösterilir.
+- **Uzak bağımlılık:** tam olarak bir tane — `three@0.169.0` (unpkg, ES modülü). CDN kapalıysa sahne açılmaz. Sürüm bilerek pinlidir; QA bunu dosyadan okuyup bu README ile karşılaştırır.
+- **Ağ ve depolama yok.** `fetch`, `XMLHttpRequest`, `localStorage`, çerez, analitik — hiçbiri yoktur ve QA bunların yokluğunu her koşuda denetler. Skorun kaydedilmez.
+- **Ses yok.** Bilinçli bir karar: otomatik ses açan bir sayfa istemedim.
+- **Hareket azaltma** tercihi açıksa sahne başlamadan önce bir onay ekranı gösterilir, kamera sarsıntısı kapatılır ve yıldız sayısı düşürülür — ama koridor doğası gereği sürekli hareket eder. Bu bir kaçış değil, dürüst bir uyarıdır.
+- **`neon-overdrive-game`** deposu bu deponun eski, boş ikizidir. Oyun burada yaşar; oradaki kopya silinmeyi bekliyor.
+- Skor tablosu, çok oyunculu mod ve seviye editörü **yoktur** ve planlanmıyor.
+
+## Lisans
+
+MIT — bkz. [LICENSE](LICENSE).
