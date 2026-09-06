@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#05030f">
+<meta name="description" content="Neon Overdrive — tek dosyalık, prosedürel bir siberpunk koridor uçuşu. Kurulum yok, varlık dosyası yok, kayıt yok.">
+<title>Neon Overdrive — Prosedürel Neon Koridor</title>
+<style>
+:root{color-scheme:dark;--accent:#ff2d78;--cyan:#2de2ff;--ink:#05030f;--paper:#f4f6ff}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--ink);color:var(--paper);
+  font-family:ui-sans-serif,system-ui,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+canvas#scene{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;outline:none}
+canvas#scene:focus-visible{outline:3px solid var(--cyan);outline-offset:-3px}
+.vignette{position:fixed;inset:0;pointer-events:none;z-index:1;
+  background:radial-gradient(ellipse at 50% 45%,transparent 40%,rgba(2,1,10,.85) 120%)}
+.layer{position:fixed;inset:0;z-index:2;pointer-events:none;display:flex;flex-direction:column;
+  justify-content:space-between;padding:clamp(14px,2.4vw,30px)}
+header{display:flex;justify-content:space-between;align-items:flex-start;gap:18px}
+h1{margin:0;font-size:clamp(15px,2vw,20px);font-weight:800;letter-spacing:.34em;text-transform:uppercase}
+h1 small{display:block;margin-top:6px;font-size:9px;font-weight:600;letter-spacing:.28em;color:#9aa3c7}
+.hud{display:grid;grid-template-columns:repeat(4,minmax(64px,auto));gap:2px;
+  border:1px solid rgba(255,255,255,.14);border-radius:12px;overflow:hidden;background:rgba(6,4,20,.72);
+  backdrop-filter:blur(10px)}
+.hud div{padding:8px 12px;text-align:right}
+.hud span{display:block;font-size:8px;letter-spacing:.24em;color:#8b93b8;margin-bottom:3px}
+.hud b{font:700 15px/1 ui-monospace,SFMono-Regular,Menlo,monospace;font-variant-numeric:tabular-nums}
+footer{display:flex;justify-content:space-between;align-items:flex-end;gap:18px;flex-wrap:wrap}
+.keys{font-size:11px;line-height:1.7;color:#9aa3c7;max-width:34ch}
+.keys kbd{display:inline-block;min-width:20px;padding:1px 5px;border:1px solid rgba(255,255,255,.24);
+  border-radius:5px;font:600 10px/1.5 ui-monospace,monospace;color:var(--paper)}
+.pads{display:flex;gap:8px;pointer-events:auto}
+.pads button{border:1px solid rgba(255,255,255,.18);background:rgba(8,6,26,.82);color:var(--paper);
+  border-radius:12px;padding:12px 16px;font:700 11px/1 ui-sans-serif,system-ui;letter-spacing:.14em;
+  cursor:pointer;min-width:52px;min-height:44px}
+.pads button:hover{border-color:var(--cyan);color:var(--cyan)}
+.pads button:focus-visible{outline:3px solid var(--cyan);outline-offset:2px}
+.pads button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+.sheet{position:fixed;inset:0;z-index:4;display:none;place-items:center;text-align:center;padding:24px;
+  background:rgba(3,2,12,.86);backdrop-filter:blur(6px)}
+.sheet.show{display:grid}
+.sheet .card{max-width:44ch;pointer-events:auto}
+.sheet h2{margin:0 0 10px;font-size:clamp(22px,4vw,34px);letter-spacing:-.02em}
+.sheet p{margin:0 0 18px;font-size:13px;line-height:1.75;color:#b9c0dd}
+.sheet button{border:0;border-radius:12px;padding:14px 26px;background:var(--accent);color:#fff;
+  font:800 12px/1 ui-sans-serif,system-ui;letter-spacing:.2em;cursor:pointer;min-height:46px}
+.sheet button:focus-visible{outline:3px solid var(--cyan);outline-offset:3px}
+#loader{position:fixed;inset:0;z-index:6;display:grid;place-items:center;background:var(--ink);
+  font:700 10px/1 ui-monospace,monospace;letter-spacing:.34em;color:#7d86ad;transition:opacity .5s,visibility .5s}
+#loader.done{opacity:0;visibility:hidden}
+#fallback{position:fixed;inset:0;z-index:7;display:none;place-items:center;padding:26px;text-align:center;
+  background:var(--ink);font-size:13px;line-height:1.8;color:#b9c0dd}
+#fallback.show{display:grid}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+@media(max-width:720px){
+  .hud{grid-template-columns:repeat(2,1fr)}
+  .keys{display:none}
+  footer{justify-content:center}
+  .pads{width:100%}
+  .pads button{flex:1}
+}
+</style>
+</head>
+<body>
+<canvas id="scene" tabindex="0" aria-label="Neon Overdrive oyun sahnesi"></canvas>
+<div class="vignette"></div>
+
+<div class="layer">
+  <header>
+    <h1>Neon Overdrive<small>Prosedürel koridor · tek dosya</small></h1>
+    <div class="hud" role="status" aria-live="off">
+      <div><span>HIZ</span><b id="hud-speed">0</b></div>
+      <div><span>MESAFE</span><b id="hud-distance">0</b></div>
+      <div><span>GEÇİT</span><b id="hud-gates">0</b></div>
+      <div><span>SKOR</span><b id="hud-score">0</b></div>
+    </div>
+  </header>
+  <footer>
+    <p class="keys">
+      <kbd>A</kbd><kbd>D</kbd> veya <kbd>←</kbd><kbd>→</kbd> şerit değiştirir ·
+      <kbd>Space</kbd> turbo · <kbd>P</kbd> duraklatır · <kbd>R</kbd> baştan başlatır.<br>
+      Her engel sırası beş şeridin en fazla üçünü kapatır — geçilebilir bir yol her zaman vardır.
+    </p>
+    <nav class="pads" aria-label="Dokunmatik kumanda">
+      <button id="btn-left" type="button" aria-label="Sola geç">◀</button>
+      <button id="btn-boost" type="button" aria-pressed="false" aria-label="Turbo">TURBO</button>
+      <button id="btn-right" type="button" aria-label="Sağa geç">▶</button>
+      <button id="btn-restart" type="button" aria-label="Baştan başlat">R</button>
+    </nav>
+  </footer>
+</div>
+
+<div class="sheet" id="sheet">
+  <div class="card">
+    <h2 id="sheet-title">Neon Overdrive</h2>
+    <p id="sheet-text">Beş şeritli neon koridorda uç. Engeller sabit bir tohumdan üretilir: her oyun aynı koridordur, fark eden yalnızca senin sürüşün.</p>
+    <button id="btn-start" type="button">BAŞLAT</button>
+  </div>
+</div>
+
+<div id="loader">NEON OVERDRIVE YÜKLENİYOR</div>
+<div id="fallback"><p><b>Bu tarayıcıda WebGL yok.</b><br>Neon Overdrive donanım hızlandırmalı bir 3B sahnedir; yazılımsal bir yedeği yoktur. Güncel bir masaüstü tarayıcısında açmayı deneyin.</p></div>
+<p class="sr">Oyun klavye ile oynanır: A ve D şerit değiştirir, boşluk turbo verir, R baştan başlatır.</p>
+
+<script type="module">
+import * as THREE from 'https://unpkg.com/three@0.169.0/build/three.module.js';
+
+/* Engel üreteci. Aşağıdaki blok tests/qa.mjs tarafından bu dosyadan sökülüp
+   aynen çalıştırılır: bağımlılığı yoktur, DOM'a dokunmaz ve kopyası testte
+   tutulmaz. Sınırları değiştirirsen kanıt da onunla birlikte değişir. */
+/* GEN:BEGIN */
+const LANES = 5;
+const ROW_GAP = 62;
+const SEED = 0x5eed1;
+const MAX_BLOCKED = 3;
+const CENTER = 2;
+
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * index. sıradaki engellerin kapattığı şeritler.
+ *
+ * Geçilebilirlik burada tesadüf değil, yapısal bir garantidir: her sıranın bir
+ * "kapı" şeridi vardır ve tek numaralı sıralarda bu kapı daima merkezdir.
+ * Merkez, beş şeridin hepsine en fazla 2 uzaklıkta olduğundan, kapılar
+ * zinciri sıra başına en fazla 2 şerit değiştirebilen bir oyuncu için her
+ * zaman yürünebilir kalır. Engeller yalnızca kapı dışındaki şeritlere konur.
+ */
+function rowBlocks(seed, index) {
+  const rnd = mulberry32((seed ^ Math.imul(index + 1, 2654435761)) >>> 0);
+  const gate = index % 2 === 1 ? CENTER : Math.floor(rnd() * LANES);
+  const count = 1 + Math.floor(rnd() * MAX_BLOCKED);
+  const blocked = [];
+  let guard = 0;
+  while (blocked.length < count && guard++ < 64) {
+    const lane = Math.floor(rnd() * LANES);
+    if (lane !== gate && !blocked.includes(lane)) blocked.push(lane);
+  }
+  return blocked.sort((a, b) => a - b);
+}
+/* GEN:END */
+
+const LANE_W = 3.25;
+const laneX = (lane) => (lane - (LANES - 1) / 2) * LANE_W;
+const ROWS_AHEAD = 7;
+const BASE_SPEED = 34;
+const MAX_SPEED = 132;
+const ACCEL = 1.35;
+const BOOST = 1.55;
+const SHIP_HALF = 0.62;
+const OBST_HALF = LANE_W * 0.42;
+const STEP = 1 / 120;
+
+const canvas = document.getElementById('scene');
+const loaderEl = document.getElementById('loader');
+const fallbackEl = document.getElementById('fallback');
+const sheetEl = document.getElementById('sheet');
+const sheetTitle = document.getElementById('sheet-title');
+const sheetText = document.getElementById('sheet-text');
+const hud = {
+  speed: document.getElementById('hud-speed'),
+  distance: document.getElementById('hud-distance'),
+  gates: document.getElementById('hud-gates'),
+  score: document.getElementById('hud-score')
+};
+
+function webglAvailable() {
+  try {
+    const probe = document.createElement('canvas');
+    return !!(probe.getContext('webgl2') || probe.getContext('webgl'));
+  } catch { return false; }
+}
+if (!webglAvailable()) {
+  fallbackEl.classList.add('show');
+  loaderEl.classList.add('done');
+  throw new Error('WebGL unavailable');
+}
+
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const motionState = reduced ? 'reduced' : 'full';
+document.documentElement.dataset.motionState = motionState;
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: !reduced, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, reduced ? 1 : 1.75));
+renderer.setSize(innerWidth, innerHeight, false);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x05030f);
+scene.fog = new THREE.Fog(0x05030f, 42, 205);
+
+const camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.1, 420);
+camera.position.set(0, 4.2, 11.5);
+
+scene.add(new THREE.HemisphereLight(0x6f7bff, 0x120726, 0.85));
+const key = new THREE.DirectionalLight(0xff2d78, 0.85);
+key.position.set(-8, 14, 6);
+scene.add(key);
+
+const neon = (hex, intensity = 1.6) => {
+  const m = new THREE.MeshStandardMaterial({ color: hex, roughness: 0.32, metalness: 0.12 });
+  m.emissive = new THREE.Color(hex);
+  m.emissiveIntensity = intensity;
+  return m;
+};
+
+/* --- koridor: taban ızgarası, duvarlar, geçit kemerleri --- */
+const grid = new THREE.GridHelper(420, 84, 0x2de2ff, 0x241a4d);
+grid.material.transparent = true;
+grid.material.opacity = 0.5;
+grid.position.y = -0.02;
+scene.add(grid);
+const GRID_STEP = 420 / 84;
+
+const wallMat = neon(0x2de2ff, 0.9);
+for (const side of [-1, 1]) {
+  const wall = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.5, 420), wallMat);
+  wall.position.set(side * (LANE_W * LANES) / 2, 0.25, -160);
+  scene.add(wall);
+  const rail = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 420), neon(0xff2d78, 1.4));
+  rail.position.set(side * (LANE_W * LANES) / 2, 4.6, -160);
+  scene.add(rail);
+}
+
+const ARCHES = 16, ARCH_GAP = 26;
+const archGeo = new THREE.TorusGeometry(LANE_W * LANES * 0.55, 0.08, 6, 24, Math.PI);
+const arches = [];
+for (let i = 0; i < ARCHES; i++) {
+  const arch = new THREE.Mesh(archGeo, neon(i % 2 ? 0x2de2ff : 0xff2d78, 1.9));
+  scene.add(arch);
+  arches.push(arch);
+}
+
+const starCount = reduced ? 220 : 620;
+const starPos = new Float32Array(starCount * 3);
+const starRnd = mulberry32(0xc0ffee);
+for (let i = 0; i < starCount; i++) {
+  starPos[i * 3] = (starRnd() - 0.5) * 260;
+  starPos[i * 3 + 1] = 6 + starRnd() * 80;
+  starPos[i * 3 + 2] = -starRnd() * 400;
+}
+const starGeo = new THREE.BufferGeometry();
+starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPos, 3));
+scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0x9fb6ff, size: 0.5, transparent: true, opacity: 0.75 })));
+
+/* --- engel havuzu --- */
+const obstGeo = new THREE.BoxGeometry(OBST_HALF * 2, 2.4, 1.5);
+const obstMat = neon(0xff2d78, 2.1);
+const pool = [];
+for (let i = 0; i < ROWS_AHEAD * MAX_BLOCKED; i++) {
+  const box = new THREE.Mesh(obstGeo, obstMat);
+  box.visible = false;
+  scene.add(box);
+  pool.push(box);
+}
+
+/* --- gemi --- */
+const ship = new THREE.Group();
+const hull = new THREE.Mesh(new THREE.ConeGeometry(0.55, 2.1, 5), neon(0xf4f6ff, 0.6));
+hull.rotation.x = -Math.PI / 2;
+ship.add(hull);
+for (const side of [-1, 1]) {
+  const wing = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.1, 0.6), neon(0x2de2ff, 2.2));
+  wing.position.set(side * 0.72, 0, 0.35);
+  ship.add(wing);
+}
+const thrust = new THREE.Mesh(new THREE.ConeGeometry(0.3, 1.1, 8), neon(0xff2d78, 2.6));
+thrust.rotation.x = Math.PI / 2;
+thrust.position.z = 1.35;
+ship.add(thrust);
+ship.position.y = 1.15;
+scene.add(ship);
+
+/* --- durum --- */
+let state = 'ready';
+let distance = 0, speed = BASE_SPEED, score = 0, gates = 0, frames = 0;
+let lane = 2, shipX = laneX(2), nextRow = 1, boosting = false;
+let shake = 0, hudAt = 0;
+
+function resetRun() {
+  distance = 0; speed = BASE_SPEED; score = 0; gates = 0;
+  lane = 2; shipX = laneX(2); nextRow = 1; boosting = false; shake = 0;
+  ship.position.x = shipX; ship.rotation.z = 0;
+  camera.position.set(0, 4.2, 11.5);
+  paintHud(true);
+}
+
+function setSheet(mode) {
+  if (mode === 'ready') {
+    sheetTitle.textContent = 'Neon Overdrive';
+    sheetText.textContent = reduced
+      ? 'Hareket azaltma tercihiniz açık. Bu sahne sürekli ileri hareket eder; kamera sarsıntısı ve yıldız yoğunluğu düşürüldü ama akış duramaz. Yine de başlatabilirsiniz.'
+      : 'Beş şeritli neon koridorda uç. Engeller sabit bir tohumdan üretilir: her oyun aynı koridordur, fark eden yalnızca senin sürüşün.';
+    document.getElementById('btn-start').textContent = reduced ? 'YİNE DE BAŞLAT' : 'BAŞLAT';
+    sheetEl.classList.add('show');
+  } else if (mode === 'crashed') {
+    sheetTitle.textContent = 'Çarptın';
+    sheetText.textContent = `${Math.floor(distance)} m · ${gates} geçit · ${score} puan. Koridor aynı koridor; tekrar dene.`;
+    document.getElementById('btn-start').textContent = 'TEKRAR';
+    sheetEl.classList.add('show');
+  } else if (mode === 'paused') {
+    sheetTitle.textContent = 'Duraklatıldı';
+    sheetText.textContent = 'P ile devam et.';
+    document.getElementById('btn-start').textContent = 'DEVAM';
+    sheetEl.classList.add('show');
+  } else {
+    sheetEl.classList.remove('show');
+  }
+  document.documentElement.dataset.gameState = state;
+}
+
+function start() {
+  // Duraklatılmış bir tur "devam" eder; diğer her durumda baştan başlar.
+  if (state === 'paused') { state = 'running'; setSheet('running'); return; }
+  restart();
+}
+
+// R her koşulda baştan başlatır — duraklatılmışken bile. README bunu böyle
+// vaat ediyor; "devam" ile "baştan" aynı tuşa binerse vaat yalan olur.
+function restart() {
+  resetRun();
+  state = 'running';
+  setSheet('running');
+  canvas.focus();
+}
+
+function crash() {
+  state = 'crashed';
+  shake = 1;
+  setSheet('crashed');
+}
+
+function paintHud(force) {
+  const now = performance.now();
+  if (!force && now - hudAt < 100) return;
+  hudAt = now;
+  hud.speed.textContent = Math.round(speed);
+  hud.distance.textContent = Math.floor(distance);
+  hud.gates.textContent = gates;
+  hud.score.textContent = score;
+}
+
+/* --- girdi --- */
+const held = new Set();
+function move(delta) {
+  if (state !== 'running') return;
+  lane = Math.max(0, Math.min(LANES - 1, lane + delta));
+}
+addEventListener('keydown', (e) => {
+  if (e.repeat) { e.preventDefault(); return; }
+  const code = e.code;
+  if (code === 'ArrowLeft' || code === 'KeyA') { move(-1); e.preventDefault(); }
+  else if (code === 'ArrowRight' || code === 'KeyD') { move(1); e.preventDefault(); }
+  else if (code === 'Space') { boosting = true; e.preventDefault(); }
+  else if (code === 'KeyR') { restart(); e.preventDefault(); }
+  else if (code === 'KeyP') {
+    if (state === 'running') { state = 'paused'; setSheet('paused'); }
+    else if (state === 'paused') { state = 'running'; setSheet('running'); }
+    e.preventDefault();
+  } else if (code === 'Enter' && state !== 'running') { start(); e.preventDefault(); }
+  held.add(code);
+});
+addEventListener('keyup', (e) => {
+  if (e.code === 'Space') boosting = false;
+  held.delete(e.code);
+});
+
+const boostBtn = document.getElementById('btn-boost');
+document.getElementById('btn-left').addEventListener('pointerdown', (e) => { e.preventDefault(); move(-1); });
+document.getElementById('btn-right').addEventListener('pointerdown', (e) => { e.preventDefault(); move(1); });
+document.getElementById('btn-restart').addEventListener('pointerdown', (e) => { e.preventDefault(); restart(); });
+boostBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); boosting = true; boostBtn.setAttribute('aria-pressed', 'true'); });
+addEventListener('pointerup', () => { boosting = false; boostBtn.setAttribute('aria-pressed', 'false'); });
+document.getElementById('btn-start').addEventListener('click', start);
+
+/* --- sabit adımlı fizik --- */
+function simulate(dt) {
+  if (state !== 'running') return;
+  speed = Math.min(MAX_SPEED, speed + ACCEL * dt);
+  const v = boosting ? speed * BOOST : speed;
+  distance += v * dt;
+
+  const targetX = laneX(lane);
+  shipX += (targetX - shipX) * Math.min(1, dt * 11);
+
+  // sıradaki sıraları geçerken çarpışmayı sınırda ölç
+  while (nextRow * ROW_GAP <= distance) {
+    const blocked = rowBlocks(SEED, nextRow);
+    const hit = blocked.some((b) => Math.abs(shipX - laneX(b)) < OBST_HALF + SHIP_HALF);
+    nextRow++;
+    if (hit) { crash(); return; }
+    gates++;
+    score += 25 + Math.round(v / 10);
+  }
+  score = Math.max(score, gates * 25 + Math.floor(distance / 10));
+}
+
+/* --- çizim --- */
+function draw(dt) {
+  grid.position.z = -160 + ((distance % GRID_STEP) + GRID_STEP) % GRID_STEP;
+  for (let i = 0; i < ARCHES; i++) {
+    const z = -(((i * ARCH_GAP - distance) % (ARCHES * ARCH_GAP)) + ARCHES * ARCH_GAP) % (ARCHES * ARCH_GAP);
+    arches[i].position.set(0, 0, z);
+    arches[i].rotation.z = 0;
+  }
+  let slot = 0;
+  const firstRow = Math.max(1, Math.floor(distance / ROW_GAP) + 1);
+  for (let r = 0; r < ROWS_AHEAD; r++) {
+    const idx = firstRow + r;
+    const z = -(idx * ROW_GAP - distance);
+    for (const b of rowBlocks(SEED, idx)) {
+      const box = pool[slot++];
+      if (!box) break;
+      box.visible = true;
+      box.position.set(laneX(b), 1.2, z);
+    }
+  }
+  for (let i = slot; i < pool.length; i++) pool[i].visible = false;
+
+  ship.position.x = shipX;
+  ship.rotation.z = THREE.MathUtils.clamp((laneX(lane) - shipX) * -0.35, -0.5, 0.5);
+  thrust.scale.z = boosting ? 1.7 : 1;
+
+  shake = Math.max(0, shake - dt * 2.2);
+  const wobble = reduced ? 0 : shake * 0.5;
+  camera.position.x += (shipX * 0.62 + (Math.random() - 0.5) * wobble - camera.position.x) * Math.min(1, dt * 6);
+  camera.position.y = 4.2 + (Math.random() - 0.5) * wobble;
+  camera.lookAt(shipX * 0.35, 1.5, -22);
+  renderer.render(scene, camera);
+}
+
+/* --- döngü --- */
+let last = performance.now(), acc = 0;
+function loop(now) {
+  const dt = Math.min(0.25, (now - last) / 1000);
+  last = now;
+  acc += dt;
+  let guard = 0;
+  while (acc >= STEP && guard++ < 400) { simulate(STEP); acc -= STEP; }
+  draw(dt);
+  frames++;
+  paintHud(false);
+  requestAnimationFrame(loop);
+}
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight, false);
+});
+
+/* --- test sondası: salt okunur --- */
+const probe = {};
+Object.defineProperties(probe, {
+  frames: { get: () => frames, enumerable: true },
+  distance: { get: () => distance, enumerable: true },
+  speed: { get: () => speed, enumerable: true },
+  lane: { get: () => lane, enumerable: true },
+  shipX: { get: () => shipX, enumerable: true },
+  score: { get: () => score, enumerable: true },
+  gates: { get: () => gates, enumerable: true },
+  alive: { get: () => state === 'running', enumerable: true },
+  state: { get: () => state, enumerable: true },
+  motion: { get: () => motionState, enumerable: true },
+  nextBlocked: { get: () => rowBlocks(SEED, Math.floor(distance / ROW_GAP) + 1), enumerable: true },
+  seed: { value: SEED, enumerable: true },
+  lanes: { value: LANES, enumerable: true },
+  laneWidth: { value: LANE_W, enumerable: true },
+  rowGap: { value: ROW_GAP, enumerable: true },
+  maxBlocked: { value: MAX_BLOCKED, enumerable: true }
+});
+Object.freeze(probe);
+Object.defineProperty(window, '__overdrive', { value: probe, writable: false, configurable: false });
+
+resetRun();
+setSheet('ready');
+requestAnimationFrame(loop);
+requestAnimationFrame(() => loaderEl.classList.add('done'));
+</script>
+</body>
+</html>
