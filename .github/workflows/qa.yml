@@ -54,9 +54,18 @@ jobs:
 
       - name: pinlenen CDN adresi gerçekten var mı
         run: |
-          set -euo pipefail
-          url=$(grep -o 'https://unpkg.com/three@[^"]*' index.html | head -n1)
-          echo "denetlenen: $url"
+          set -uo pipefail
+          # Desen HER IKI tirnakta da durmalidir: import tek tirnakla yazili,
+          # [^"]* kullanmak adresin sonuna '; ekleyip 404 uretir.
+          url=$(grep -o "https://unpkg.com/three@[^\"']*" index.html | head -n1)
+          echo "ayiklanan adres: $url"
+          case "$url" in
+            https://unpkg.com/three@*/build/three.module.js) ;;
+            *)
+              echo "::error::adres ayiklamasi bozuk: '$url'"
+              exit 1
+              ;;
+          esac
           code=$(curl -s -o /dev/null -w '%{http_code}' -L "$url")
           echo "HTTP $code"
           if [ "$code" != "200" ]; then
