@@ -1,0 +1,132 @@
+name: qa
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static:
+    name: statik kapı + oynanabilirlik kanıtı
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+
+      - name: derlemesiz depo sözleşmesi
+        run: |
+          set -euo pipefail
+          for path in node_modules package-lock.json dist build; do
+            if [ -e "$path" ]; then
+              echo "::error::$path depoya girmis; bu depo derlemesizdir"
+              exit 1
+            fi
+          done
+          echo "depo temiz: derleme cikti yok"
+
+      - name: statik kapı
+        run: node tests/qa.mjs
+
+  browser:
+    name: gerçek Chromium kabul testi
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+
+      - name: pinlenen CDN adresi gerçekten var mı
+        run: |
+          set -uo pipefail
+          # Desen HER IKI tirnakta da durmalidir: import tek tirnakla yazili,
+          # [^"]* kullanmak adresin sonuna '; ekleyip 404 uretir.
+          url=$(grep -o "https://unpkg.com/three@[^\"']*" index.html | head -n1)
+          echo "ayiklanan adres: $url"
+          case "$url" in
+            https://unpkg.com/three@*/build/three.module.js) ;;
+            *)
+              echo "::error::adres ayiklamasi bozuk: '$url'"
+              exit 1
+              ;;
+          esac
+          code=$(curl -s -o /dev/null -w '%{http_code}' -L "$url")
+          echo "HTTP $code"
+          if [ "$code" != "200" ]; then
+            echo "::error::pinlenen three adresi erisilemiyor: $url (HTTP $code)"
+            exit 1
+          fi
+
+      - name: playwright kurulumu (depo agacinin disina)
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/pw"
+          cd "$RUNNER_TEMP/pw"
+          npm init -y >/dev/null
+          npm i --no-audit --no-fund playwright@1.49.1
+          npx playwright install --with-deps chromium
+          echo "PW_ROOT=$RUNNER_TEMP/pw" >> "$GITHUB_ENV"
+          echo "NODE_PATH=$RUNNER_TEMP/pw/node_modules" >> "$GITHUB_ENV"
+
+      - name: statik sunucu
+        run: |
+          nohup python3 -m http.server 8080 --bind 127.0.0.1 >/tmp/http.log 2>&1 &
+          for i in $(seq 1 40); do
+            if curl -sf http://127.0.0.1:8080/index.html >/dev/null; then
+              echo "sunucu ayakta"
+              exit 0
+            fi
+            sleep 0.5
+          done
+          echo "::error::statik sunucu 20 saniyede ayaga kalkmadi"
+          cat /tmp/http.log
+          exit 1
+
+      - name: kabul testi
+        run: |
+          set +e
+          node tests/browser.mjs http://127.0.0.1:8080 2>&1 | tee browser.log
+          code=${PIPESTATUS[0]}
+          if [ "$code" -ne 0 ]; then
+            grep -E 'FAIL|Error|error:|Cannot find' browser.log | head -40 | while IFS= read -r line; do
+              echo "::error::$line"
+            done
+          fi
+          rm -f browser.log
+          exit "$code"
+
+      - name: depo agaci hala temiz
+        if: always()
+        run: |
+          set -euo pipefail
+          for path in node_modules package-lock.json package.json; do
+            if [ -e "$path" ]; then
+              echo "::error::test kosusu depoya $path birakti"
+              exit 1
+            fi
+          done
+
+      - name: ekran görüntüsü
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: neon-overdrive-screenshot
+          path: neon-overdrive.png
+          if-no-files-found: warn
+          retention-days: 7
